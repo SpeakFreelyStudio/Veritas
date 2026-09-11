@@ -21,7 +21,7 @@ class LocalLLM:
             "model": self.model,
             "stream": False,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            "options": {"num_predict": max_tokens, "temperature": 0.1},
+            "options": {"num_predict": max_tokens, "temperature": 0.1, "num-ctx": 8192},
         }
         if json_mode:
             body["format"] = "json"  # forces valid JSON, which small models otherwise fumble
