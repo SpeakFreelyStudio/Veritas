@@ -1,4 +1,5 @@
 """How Veritas learns: taught facts, corrections, confirmations, and imported documents."""
+import re
 from pathlib import Path
 
 from . import config
@@ -9,15 +10,40 @@ Each fact must make sense on its own (replace pronouns with names).
 Respond ONLY with JSON: {"facts": ["..."]}"""
 
 
-def chunk_text(text, max_chars=1000):
+def _split_long(text, max_chars):
+    """Break an oversized passage at sentence ends (or spaces) so nothing gets cut off."""
+    pieces, current = [], ""
+    for sentence in re.split(r"(?<=[.;:!?])\s+", text):
+        while len(sentence) > max_chars:  # one enormous sentence: split at a space
+            cut = sentence.rfind(" ", 0, max_chars)
+            cut = cut if cut > 0 else max_chars
+            if current:
+                pieces.append(current)
+                current = ""
+            pieces.append(sentence[:cut].strip())
+            sentence = sentence[cut:].strip()
+        if current and len(current) + len(sentence) + 1 > max_chars:
+            pieces.append(current)
+            current = ""
+        current = f"{current} {sentence}".strip()
+    if current:
+        pieces.append(current)
+    return pieces
+
+
+def chunk_text(text, max_chars=None):
+    """Split a document into pieces small enough that the AI always sees each one in full."""
+    max_chars = max_chars or config.MEMORY_CHARS
+    lines = []
+    for line in (l.strip() for l in re.split(r"\n+", text)):
+        if line:
+            lines.extend(_split_long(line, max_chars) if len(line) > max_chars else [line])
     chunks, current = [], ""
-    for para in (p.strip() for p in text.split("\n\n")):
-        if not para:
-            continue
-        if current and len(current) + len(para) > max_chars:
+    for line in lines:
+        if current and len(current) + len(line) + 1 > max_chars:
             chunks.append(current)
             current = ""
-        current = f"{current}\n\n{para}".strip()
+        current = f"{current}\n{line}".strip()
     if current:
         chunks.append(current)
     return chunks
