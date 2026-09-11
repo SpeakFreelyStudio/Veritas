@@ -1,0 +1,4 @@
+# Local mode (default) needs nothing beyond Python's standard library.
+pytest>=8
+# Only needed for the cloud backend and for `improve`:
+anthropic>=0.40
