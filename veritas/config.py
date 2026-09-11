@@ -33,7 +33,7 @@ TRUST = {
 # ---- Efficiency --------------------------------------------------------------
 DB_PATH = os.getenv("VERITAS_DB", "veritas_memory.db")
 MEMORY_RESULTS = int(os.getenv("VERITAS_MEMORY_RESULTS", "5"))
-MEMORY_CHARS = int(os.getenv("VERITAS_MEMORY_CHARS", "500"))
+MEMORY_CHARS = int(os.getenv("VERITAS_MEMORY_CHARS", "900"))
 ANSWER_TOKENS = int(os.getenv("VERITAS_ANSWER_TOKENS", "700"))
 VERIFY_TOKENS = int(os.getenv("VERITAS_VERIFY_TOKENS", "300"))
 # Off by default so Veritas thinks through every question. Turn on to reuse answers
