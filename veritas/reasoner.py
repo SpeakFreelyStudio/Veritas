@@ -4,7 +4,10 @@ Every question is thought through by the model. Memory (including your correctio
 given to the model as trusted evidence; it is never used to skip the thinking or the review.
 """
 import hashlib
+import json
+import os
 import re
+import sys
 from dataclasses import asdict, dataclass, field
 
 from . import config
@@ -23,9 +26,12 @@ Never invent names, numbers, dates, quotes, laws, cases, or sources. If you don'
 For legal questions: name the jurisdiction the answer applies to, point out any deadlines, and say when
 the person should contact legal aid or a lawyer.
 If a request would break a hard rule, decline it and offer a lawful, ethical alternative.
-"confidence" = honest probability (0-1) that your answer is fully correct.
-"domain" = legal, medical, financial, or general.
-Reply ONLY with JSON: {"answer":"...","confidence":0.0,"domain":"general","basis":"memory|general_knowledge|mixed|unknown","citations":[12],"uncertainties":["..."]}"""
+"confidence": a decimal between 0 and 1 for how likely your answer is fully correct
+(for example 0.3 = probably wrong, 0.6 = unsure, 0.9 = very likely right). Choose your own honest value.
+"domain": legal, medical, financial, or general.
+Reply ONLY with a JSON object with these keys:
+"answer" (text), "confidence" (decimal 0-1), "domain", "basis" (memory, general_knowledge, mixed, or unknown),
+"citations" (list of memory numbers you used), "uncertainties" (list of text)."""
 
 VERIFY_SYSTEM = """You are a strict fact-checker and principles reviewer. Check the DRAFT answer.
 
@@ -33,10 +39,14 @@ PRINCIPLES:
 <<PRINCIPLES>>
 
 1. Facts: list claims unsupported by MEMORY, likely wrong, or stated more confidently than the evidence allows.
+   Judge whether what the draft says is correct. A correct answer that doesn't mention every detail is still correct.
 2. Principles: list any conflicts with the principles. Set "hard_line_violated" to true ONLY if the draft,
    or fulfilling the request, would break a rule marked H; put that rule's id (like "H2") in "rule".
-3. Give your honest probability (0-1) that the draft is fully correct.
-Reply ONLY with JSON: {"issues":["..."],"adjusted_confidence":0.0,"principle_concerns":["..."],"hard_line_violated":false,"rule":""}"""
+3. "adjusted_confidence": a decimal between 0 and 1 for how likely the draft is fully correct
+   (0.3 = probably wrong, 0.6 = unsure, 0.9 = very likely right). Choose your own honest value.
+Reply ONLY with a JSON object with these keys:
+"issues" (list of text), "adjusted_confidence" (decimal 0-1), "principle_concerns" (list of text),
+"hard_line_violated" (true or false), "rule" (text, empty if none)."""
 
 HIGH_STAKES = {"legal", "medical", "financial"}
 LEGAL_TERMS = {
@@ -70,10 +80,23 @@ CACHEABLE = ("text", "confidence", "basis", "citations", "uncertainties", "issue
 
 
 def _clamp(x):
-    try:
-        return max(0.0, min(1.0, float(x)))
-    except (TypeError, ValueError):
+    """Read a confidence value however the model wrote it: 0.85, "0.85", 85, "85%", or "85 percent".
+    Anything unreadable counts as 0, which means Veritas won't answer."""
+    if isinstance(x, bool) or x is None:
         return 0.0
+    percent = isinstance(x, str) and "%" in x or isinstance(x, str) and "percent" in x.lower()
+    try:
+        value = float(re.sub(r"[^0-9.\-]", "", str(x)) if isinstance(x, str) else x)
+    except ValueError:
+        return 0.0
+    if percent or 1.0 < value <= 100.0:
+        value /= 100.0
+    return max(0.0, min(1.0, value))
+
+
+def _debug(label, data):
+    if os.getenv("VERITAS_DEBUG") == "1":
+        print(f"\n--- {label} (what the model actually said) ---\n{json.dumps(data, indent=2)}", file=sys.stderr)
 
 
 def _as_list(value):
@@ -140,6 +163,7 @@ class Reasoner:
             return Answer(f"I couldn't produce a reliable answer ({e}).", 0.0, "unknown",
                           abstained=True, model_calls=1)
 
+        _debug("draft answer", draft)
         answer_text = str(draft.get("answer", "")).strip()
         stated = _clamp(draft.get("confidence", 0))
         domain = str(draft.get("domain", "general")).lower()
@@ -157,6 +181,8 @@ class Reasoner:
             return Answer(f"I couldn't complete my fact and principles review ({e}), so I won't give an "
                           "unreviewed answer. Please try again.", 0.0, "unknown", abstained=True,
                           model_calls=2, domain=domain)
+
+        _debug("review", check)
 
         # Hard rules: block outright.
         if _truthy(check.get("hard_line_violated")):
