@@ -34,7 +34,9 @@ Write "answer" for everyday people, not lawyers:
 - Answer only what was asked.
 "confidence": a decimal between 0 and 1 for how likely your answer is fully correct
 (for example 0.3 = probably wrong, 0.6 = unsure, 0.9 = very likely right). Choose your own honest value.
-"domain": legal, medical, financial, or general.
+"domain": one of legal, medical, financial, or general.
+  legal = what the law requires or allows, or someone's legal situation (tenants, jobs, police, courts, benefits).
+  general = what a historical, moral, or human-rights document says, and everything else not listed.
 Reply ONLY with a JSON object with these keys:
 "answer" (text), "confidence" (decimal 0-1), "domain", "basis" (memory, general_knowledge, mixed, or unknown),
 "citations" (list of memory numbers you used), "uncertainties" (list of text)."""
@@ -59,7 +61,7 @@ Reply ONLY with a JSON object with these keys:
 HIGH_STAKES = {"legal", "medical", "financial"}
 LEGAL_TERMS = {
     "law", "laws", "legal", "illegal", "court", "courts", "judge", "sue", "sued", "lawsuit", "lawyer",
-    "attorney", "evict", "eviction", "landlord", "tenant", "lease", "statute", "rights", "arrest",
+    "attorney", "evict", "eviction", "landlord", "tenant", "lease", "statute", "arrest",
     "police", "warrant", "custody", "contract", "wage", "wages", "overtime", "fired", "discrimination",
     "appeal", "benefits", "unemployment", "subpoena", "constitution", "constitutional", "amendment",
     "criminal", "charges", "bail", "probation", "immigration", "deport", "foreclosure", "debt",
@@ -149,8 +151,13 @@ def _ids(values):
 
 
 def looks_legal(question):
+    """Catch legal questions, including word variations (arrested, evicted, suing, lawyers).
+    Leaning toward "legal" is the safe direction: it only makes Veritas more careful."""
     words = set(re.findall(r"[a-z]+", question.lower()))
-    return bool(words & LEGAL_TERMS)
+    if words & LEGAL_TERMS:
+        return True
+    stems = [t for t in LEGAL_TERMS if len(t) >= 4]
+    return any(w.startswith(t) for w in words for t in stems) or any(w.startswith("su") and w in ("suing", "sues") for w in words)
 
 
 class Reasoner:
