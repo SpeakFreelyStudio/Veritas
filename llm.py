@@ -76,9 +76,15 @@ def make_llm(backend=None):
 
 
 def extract_json(text):
-    """Pull the first JSON object out of a model response."""
-    text = re.sub(r"```(?:json)?", "", text).strip()
-    start, end = text.find("{"), text.rfind("}")
-    if start == -1 or end == -1:
-        raise ValueError("No JSON object found in model response")
-    return json.loads(text[start : end + 1])
+    """Find the first complete JSON object in a model response, even if it's surrounded by prose."""
+    text = re.sub(r"```(?:json)?", "", text)
+    decoder = json.JSONDecoder()
+    for i, ch in enumerate(text):
+        if ch == "{":
+            try:
+                obj, _ = decoder.raw_decode(text, i)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(obj, dict):
+                return obj
+    raise ValueError("No JSON object found in model response")

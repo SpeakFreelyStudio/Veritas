@@ -56,16 +56,23 @@ def cmd_chat(args):
             continue
         if line == "/quit":
             break
-        if line.startswith("/teach "):
-            print(f"Stored as memory m{trainer.teach(line[7:])}.")
-        elif line.startswith("/correct ") and last:
-            print(f"Thanks. Stored correction as memory m{trainer.correct(last, line[9:])}.")
-        elif line == "/good" and last:
-            print(f"Confirmed and stored as memory m{trainer.confirm(last)}.")
-        else:
-            a = reasoner.ask(line)
-            last = a.interaction_id
-            print_answer(a)
+        try:
+            if line.startswith("/teach "):
+                print(f"Stored as memory m{trainer.teach(line[7:])}.")
+            elif line.startswith(("/correct", "/good")) and last is None:
+                print("Ask a question first, then /correct or /good applies to my answer.")
+            elif line.startswith("/correct "):
+                print(f"Thanks. Stored correction as memory m{trainer.correct(last, line[9:])}.")
+            elif line == "/good":
+                print(f"Confirmed and stored as memory m{trainer.confirm(last)}.")
+            elif line.startswith("/"):
+                print("Commands: /teach <fact>  /correct <right answer>  /good  /quit")
+            else:
+                a = reasoner.ask(line)
+                last = a.interaction_id
+                print_answer(a)
+        except (ValueError, RuntimeError) as e:
+            print(f"Error: {e}")
 
 
 def cmd_teach(args):
@@ -144,7 +151,11 @@ def main(argv=None):
     args = p.parse_args(argv)
     global _BACKEND
     _BACKEND = args.backend
-    args.fn(args)
+    try:
+        args.fn(args)
+    except (ValueError, RuntimeError, FileNotFoundError) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

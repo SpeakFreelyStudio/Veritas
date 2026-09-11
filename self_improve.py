@@ -8,6 +8,7 @@ Safety design:
   4. Approved changes go on a new git branch, so any change can be undone.
 """
 import difflib
+import re
 import shutil
 import subprocess
 import sys
@@ -27,13 +28,19 @@ Respond ONLY with JSON:
 {"summary": "...", "changes": [{"path": "veritas/<file>.py", "new_content": "<complete new file contents>"}]}"""
 
 
+SAFE_PATH = re.compile(r"^[A-Za-z0-9_]+(/[A-Za-z0-9_]+)*\.py$")
+BLOCKED_NAMES = {"conftest.py", "sitecustomize.py", "usercustomize.py"}  # could hijack Python or the tests
+
+
 def is_allowed(rel_path):
-    rel = str(rel_path).replace("\\", "/")
-    if rel.startswith("/") or ".." in rel.split("/"):
+    rel = str(rel_path)
+    # Only plain names like veritas/memory.py: no spaces, dots, extra slashes, or other tricks.
+    if not SAFE_PATH.match(rel):
         return False
-    if not rel.startswith(EDITABLE_DIR) or not rel.endswith(".py"):
+    low = rel.casefold()  # Mac and Windows treat Self_Improve.py and self_improve.py as the same file
+    if not low.startswith(EDITABLE_DIR) or low.rsplit("/", 1)[-1] in BLOCKED_NAMES:
         return False
-    return not any(rel == p or rel.startswith(p) for p in PROTECTED)
+    return not any(low == p.casefold() or low.startswith(p.casefold()) for p in PROTECTED)
 
 
 def _git(root, *args):
@@ -41,9 +48,12 @@ def _git(root, *args):
 
 
 def _run_tests(root):
-    r = subprocess.run(
-        [sys.executable, "-m", "pytest", "-q"], cwd=root, capture_output=True, text=True, timeout=600
-    )
+    try:
+        r = subprocess.run(
+            [sys.executable, "-m", "pytest", "-q", "tests"], cwd=root, capture_output=True, text=True, timeout=600
+        )
+    except subprocess.TimeoutExpired:
+        return False, "Tests took longer than 10 minutes (possible infinite loop)."
     return r.returncode == 0, (r.stdout + r.stderr)[-4000:]
 
 
@@ -72,7 +82,8 @@ def improve(goal, llm, root=".", approve=None, log=print):
             feedback = f"\n\nYour last response was not valid JSON ({e}). Respond with JSON only."
             continue
 
-        changes = [c for c in plan.get("changes", []) if isinstance(c, dict)]
+        raw_changes = plan.get("changes", []) if isinstance(plan.get("changes"), list) else []
+        changes = [c for c in raw_changes if isinstance(c, dict) and isinstance(c.get("new_content"), str)]
         blocked = [c.get("path") for c in changes if not is_allowed(c.get("path", ""))]
         if not changes or blocked:
             feedback = f"\n\nRejected: no changes, or edits to forbidden paths {blocked}. Only edit files under veritas/ (not self_improve.py)."
@@ -106,13 +117,24 @@ def improve(goal, llm, root=".", approve=None, log=print):
 
         base = _git(root, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip() or "main"
         branch = f"veritas-self-edit-{int(time.time())}"
-        _git(root, "checkout", "-b", branch)
+        made = _git(root, "checkout", "-q", "-b", branch)
+        if made.returncode != 0:
+            return f"Couldn't create a branch, so nothing was modified. Git said: {made.stderr.strip()}"
         for c in changes:
             target = root / c["path"]
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(c["new_content"])
             _git(root, "add", c["path"])
-        _git(root, "commit", "-m", f"Veritas self-edit: {plan.get('summary', goal)[:70]}")
+        done = _git(root, "commit", "-q", "-m", f"Veritas self-edit: {plan.get('summary', goal)[:70]}")
+        if done.returncode != 0:
+            # Undo everything and return to where we started.
+            _git(root, "reset", "-q", "--hard")
+            _git(root, "checkout", "-q", base)
+            _git(root, "branch", "-q", "-D", branch)
+            return ("The change passed its tests but couldn't be saved, so it was undone and nothing was "
+                    f"modified. Git said: {done.stderr.strip() or done.stdout.strip()}\n"
+                    "If git needs your name and email, run: git config --global user.name \"Your Name\" "
+                    "and git config --global user.email \"you@example.com\"")
         return (f"Committed on branch '{branch}'.\n"
                 f"Keep it:  git checkout {base} && git merge {branch}\n"
                 f"Undo it:  git checkout {base} && git branch -D {branch}")

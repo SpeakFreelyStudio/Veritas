@@ -27,27 +27,32 @@ def make_handler(reasoner, trainer, memory, token="", backend_name=""):
     lock = threading.Lock()
 
     class Handler(BaseHTTPRequestHandler):
+        timeout = 30  # drop connections that stall
+
         def log_message(self, *args):
             pass  # quiet
 
         def _send(self, code, obj):
             body = json.dumps(obj).encode()
-            self.send_response(code)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass  # the caller hung up
 
         def _authorized(self):
             if not token:
                 return True
             given = self.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-            return hmac.compare_digest(given, token)
+            return hmac.compare_digest(given.encode("utf-8", "replace"), token.encode("utf-8"))
 
         def _json(self):
             n = int(self.headers.get("Content-Length", 0))
-            if n > MAX_BODY:
-                raise ValueError("Request too large")
+            if n < 0 or n > MAX_BODY:
+                raise ValueError("Invalid request size")
             return json.loads(self.rfile.read(n) or b"{}")
 
         def do_GET(self):
