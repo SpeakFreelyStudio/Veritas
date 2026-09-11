@@ -121,6 +121,21 @@ class MemoryBank:
             self.conn.commit()
             return True
 
+    def sources(self):
+        """Every loaded document with how many memory pieces it has."""
+        return [dict(r) for r in self.conn.execute(
+            """SELECT source, kind, jurisdiction, as_of, COUNT(*) AS pieces FROM facts
+               WHERE superseded_by IS NULL GROUP BY source, kind, jurisdiction, as_of ORDER BY source"""
+        )]
+
+    def forget_source(self, source):
+        """Remove every memory that came from one document, e.g. before reloading an updated law."""
+        with self.lock:
+            ids = [r["id"] for r in self.conn.execute("SELECT id FROM facts WHERE source=?", (source,))]
+            for fid in ids:
+                self.forget(fid)
+            return len(ids)
+
     def get(self, fact_id):
         row = self.conn.execute("SELECT * FROM facts WHERE id=?", (fact_id,)).fetchone()
         return self._fact(row) if row else None

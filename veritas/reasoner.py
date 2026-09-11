@@ -31,7 +31,8 @@ Write "answer" for everyday people, not lawyers:
   (for example, "the First Amendment to the U.S. Constitution").
 - Explain what it means in real life, including important limits.
 - If you quote a law or document, copy the words exactly from MEMORY and put the quote after your explanation.
-- Answer only what was asked.
+- Answer only what was asked. Lead with the main point. Leave out neighboring material on other topics
+  (for example, a different article than the one that answers the question).
 "confidence": a decimal between 0 and 1 for how likely your answer is fully correct
 (for example 0.3 = probably wrong, 0.6 = unsure, 0.9 = very likely right). Choose your own honest value.
 "domain": one of legal, medical, financial, or general.
@@ -47,8 +48,11 @@ PRINCIPLES:
 <<PRINCIPLES>>
 
 1. Facts: list claims unsupported by MEMORY, likely wrong, or stated more confidently than the evidence allows.
-   Judge whether what the draft says is correct. A correct answer that doesn't mention every detail is still correct.
-   Only list problems with how the draft answers THIS question. Don't list topics the question didn't ask about.
+   Judge whether what the draft says is correct AND whether it answers the main point of THIS question.
+   - Leaving out the main point of what was asked IS a problem: list it and lower your confidence a lot.
+   - Including material about a different topic IS a problem: list it.
+   - Leaving out a minor detail is NOT a problem. Don't list topics the question didn't ask about.
+   Factual gaps belong in "issues", not in "principle_concerns".
    If there are no problems, use an empty list.
 2. Principles: list any conflicts with the principles. Set "hard_line_violated" to true ONLY if the draft,
    or fulfilling the request, would break a rule marked H; put that rule's id (like "H2") in "rule".

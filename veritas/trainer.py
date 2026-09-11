@@ -31,8 +31,14 @@ def _split_long(text, max_chars):
     return pieces
 
 
+# Lines like "Article 26", "Article. I.", "Section. 8.", "Amendment XIV", "§ 250.501", "Chapter 3"
+HEADING = re.compile(r"^(article|section|amendment|chapter|part|§)\b\.?\s*[\dIVXLCivxlc]+", re.IGNORECASE)
+
+
 def chunk_text(text, max_chars=None):
-    """Split a document into pieces small enough that the AI always sees each one in full."""
+    """Split a document into pieces small enough that the AI always sees each one in full.
+    A new piece starts at every Article, Section, or Amendment heading, so each one stays whole
+    and never gets mixed with its neighbors."""
     max_chars = max_chars or config.MEMORY_CHARS
     lines = []
     for line in (l.strip() for l in re.split(r"\n+", text)):
@@ -40,7 +46,7 @@ def chunk_text(text, max_chars=None):
             lines.extend(_split_long(line, max_chars) if len(line) > max_chars else [line])
     chunks, current = [], ""
     for line in lines:
-        if current and len(current) + len(line) + 1 > max_chars:
+        if current and (HEADING.match(line) or len(current) + len(line) + 1 > max_chars):
             chunks.append(current)
             current = ""
         current = f"{current}\n{line}".strip()

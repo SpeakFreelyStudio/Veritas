@@ -106,6 +106,21 @@ def cmd_principles(args):
     print(f"\n(principles file: {p.path} | fingerprint {p.fingerprint})")
 
 
+def cmd_sources(args):
+    rows = _memory().sources()
+    if not rows:
+        print("No documents loaded yet.")
+    for r in rows:
+        where = ", ".join(x for x in (r["jurisdiction"], f"as of {r['as_of']}" if r["as_of"] else None) if x)
+        print(f"{r['source']}: {r['pieces']} pieces ({r['kind']}{', ' + where if where else ''})")
+
+
+def cmd_forget_source(args):
+    n = _memory().forget_source(args.source)
+    print(f"Removed {n} memories from {args.source}." if n else f"No memories found from '{args.source}'. "
+          "Run `python3 -m veritas sources` to see the exact names.")
+
+
 def cmd_stats(args):
     print(json.dumps(_memory().stats(), indent=2))
 
@@ -141,6 +156,9 @@ def main(argv=None):
     s.set_defaults(fn=cmd_import)
     s = sub.add_parser("forget", help="Delete a memory"); s.add_argument("memory_id", type=int); s.set_defaults(fn=cmd_forget)
     s = sub.add_parser("principles", help="Show the principles Veritas follows"); s.set_defaults(fn=cmd_principles)
+    s = sub.add_parser("sources", help="List loaded documents"); s.set_defaults(fn=cmd_sources)
+    s = sub.add_parser("forget-source", help="Remove everything loaded from one document")
+    s.add_argument("source"); s.set_defaults(fn=cmd_forget_source)
     s = sub.add_parser("stats", help="Memory bank stats"); s.set_defaults(fn=cmd_stats)
     s = sub.add_parser("improve", help="Have Veritas propose a fix to its own code")
     s.add_argument("goal"); s.add_argument("--root", default="."); s.set_defaults(fn=cmd_improve)
