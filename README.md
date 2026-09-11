@@ -42,7 +42,7 @@ Requires Python 3.10+ and git.
    git clone https://github.com/<you>/veritas.git
    cd veritas
    pip install pytest
-   python -m pytest -q          # should say 31 passed
+   python -m pytest -q          # should say 51 passed
    ```
 
 To use the cloud model instead: `pip install anthropic`, set `ANTHROPIC_API_KEY`, and add `--backend anthropic` to any command.
@@ -105,7 +105,7 @@ veritas/
   server.py              local HTTP API
   self_improve.py        propose -> sandbox test -> diff -> approve -> git branch (protected)
   cli.py, config.py
-tests/                   31 tests, including principle enforcement (protected)
+tests/                   51 tests, including principle enforcement (protected)
 .github/workflows/       runs the tests on GitHub automatically (protected)
 .devcontainer/           one-click Codespaces setup
 ```
